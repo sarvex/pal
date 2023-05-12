@@ -36,40 +36,36 @@ class SunOSPKGFile:
         prototype = open(self.prototypeFileName, 'w')
 
         # include the info file
-        prototype.write('i pkginfo=' + self.pkginfoFile.GetFileName() + '\n')
+        prototype.write(f'i pkginfo={self.pkginfoFile.GetFileName()}' + '\n')
         # include depencency file
-        prototype.write('i depend=' + self.depFileName + '\n')
+        prototype.write(f'i depend={self.depFileName}' + '\n')
         # include the install scripts
-        prototype.write('i preinstall=' + self.preInstallPath + '\n')
-        prototype.write('i postinstall=' + self.postInstallPath + '\n')
-        prototype.write('i preremove=' + self.preUninstallPath + '\n')
+        prototype.write(f'i preinstall={self.preInstallPath}' + '\n')
+        prototype.write(f'i postinstall={self.postInstallPath}' + '\n')
+        prototype.write(f'i preremove={self.preUninstallPath}' + '\n')
         if self.variables['PFMAJOR'] >= 6 or self.variables['PFMINOR'] >= 10:
-            prototype.write('i postremove=' + self.postUninstallPath + '\n')
-        prototype.write('i i.config=' + self.iConfigFileName + '\n')
-        prototype.write('i r.config=' + self.rConfigFileName + '\n')
+            prototype.write(f'i postremove={self.postUninstallPath}' + '\n')
+        prototype.write(f'i i.config={self.iConfigFileName}' + '\n')
+        prototype.write(f'i r.config={self.rConfigFileName}' + '\n')
 
         for d in self.sections["Directories"]:
             if d.type != "sysdir":
                 prototype.write('d none')
-                prototype.write(' ' + d.stagedLocation)
-                prototype.write(' ' + str(d.permissions) + \
-                                ' ' + d.owner + \
-                                ' ' + d.group + '\n')
+                prototype.write(f' {d.stagedLocation}')
+                prototype.write((f' {str(d.permissions)} {d.owner} {d.group}' + '\n'))
 
         for f in self.sections["Files"]:
             if f.type == "conffile":
                 prototype.write('f config')
             else:
                 prototype.write('f none')
-            prototype.write(' ' + f.stagedLocation)
-            prototype.write(' ' + str(f.permissions) + \
-                            ' ' + f.owner + \
-                            ' ' + f.group + '\n')
+            prototype.write(f' {f.stagedLocation}')
+            prototype.write((f' {str(f.permissions)} {f.owner} {f.group}' + '\n'))
 
         for l in self.sections["Links"]:
             prototype.write("s none")
-            prototype.write(' ' + l.stagedLocation)
-            prototype.write('=' + l.baseLocation + '\n')
+            prototype.write(f' {l.stagedLocation}')
+            prototype.write(f'={l.baseLocation}' + '\n')
                
     def GenerateDepFile(self):
         depfile = open(self.depFileName, 'w')
@@ -88,13 +84,9 @@ class SunOSPKGFile:
         # long term, we will create an IPS package for Solaris 11 that references IPS dependencies.
 
     def WriteScriptFile(self, filePath, section):
-       scriptFile = open(filePath, 'w')
-       script = ""
-       for line in self.sections[section]:
-           script += line + "\n"
-       script += "exit 0\n"
-       scriptFile.write(script)
-       scriptFile.close()
+        with open(filePath, 'w') as scriptFile:
+            script = "".join(line + "\n" for line in self.sections[section]) + "exit 0\n"
+            scriptFile.write(script)
 
     def GenerateScriptFiles(self):
         self.WriteScriptFile(self.preInstallPath, "Preinstall")
@@ -105,11 +97,11 @@ class SunOSPKGFile:
         self.WriteScriptFile(self.rConfigFileName, "rConfig")
 
     def BuildPackage(self):
-	
+    	
         retval = os.system('pkgmk -o' + \
-                  ' -r ' + self.stagingDir + \
-                  ' -f ' + self.prototypeFileName + \
-                  ' -d ' + self.tempDir)
+                      ' -r ' + self.stagingDir + \
+                      ' -f ' + self.prototypeFileName + \
+                      ' -d ' + self.tempDir)
         if retval != 0:
             print("Error: pkgmk failed")
             exit(1)
@@ -118,9 +110,9 @@ class SunOSPKGFile:
             basepkgfilename = self.variables['OUTPUTFILE'] + '.pkg'
         else:
             basepkgfilename = self.variables['SHORT_NAME'] + '-' + \
-                self.fullversion_dashed + \
-                '.solaris.' + str(self.variables['PFMINOR']) + '.' + \
-                self.variables['PFARCH'] + '.pkg'
+                    self.fullversion_dashed + \
+                    '.solaris.' + str(self.variables['PFMINOR']) + '.' + \
+                    self.variables['PFARCH'] + '.pkg'
 
         pkgfilename = os.path.join(self.targetDir, basepkgfilename)
 
@@ -130,15 +122,17 @@ class SunOSPKGFile:
 
         if "SKIP_BUILDING_PACKAGE" in self.variables:
             return
-            
-        retval = os.system('pkgtrans -s ' + self.tempDir + ' ' + pkgfilename + ' ' +  short_name_prefix + self.variables['SHORT_NAME'])
+
+        retval = os.system(
+            f'pkgtrans -s {self.tempDir} {pkgfilename} {short_name_prefix}'
+            + self.variables['SHORT_NAME']
+        )
         if retval != 0:
             print("Error: pkgtrans failed.")
             exit(1)
 
-        package_filename = open(self.targetDir + "/" + "package_filename", 'w')
-        package_filename.write("%s\n" % basepkgfilename)
-        package_filename.close()
+        with open(f"{self.targetDir}/package_filename", 'w') as package_filename:
+            package_filename.write("%s\n" % basepkgfilename)
 
 class PKGInfoFile:
     
@@ -177,7 +171,7 @@ class PKGInfoFile:
     def Generate(self):
         pkginfo = open(self.filename, 'w')
         for (key, value) in self.properties:
-            pkginfo.write(key + '=' + value + '\n')
+            pkginfo.write(f'{key}={value}' + '\n')
 
     def GetFileName(self):
         return self.filename

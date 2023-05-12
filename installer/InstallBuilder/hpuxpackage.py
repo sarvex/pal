@@ -35,52 +35,44 @@ class HPUXPackageFile:
         return script
         
     def GenerateScripts(self):
-        scriptfile = open(self.preinstallPath, 'w')
-        prein = self.variables["SHELL_HEADER"] + "\n"
-        prein += """
+        with open(self.preinstallPath, 'w') as scriptfile:
+            prein = self.variables["SHELL_HEADER"] + "\n"
+            prein += """
 BackupConfigurationFile() {
     mv "$1" "$1.swsave" > /dev/null 2>&1
 }
 """
-        prein += self.GetScriptAsString("Preinstall")
+            prein += self.GetScriptAsString("Preinstall")
 
-        # Make backups of conffiles
-        for f in self.sections["Files"]:
-            if f.type == "conffile":
-                prein += "BackupConfigurationFile " + f.stagedLocation + "\n"
-        prein += "exit 0\n"
-        scriptfile.write(prein)
-        scriptfile.close()
-
-
-        scriptfile = open(self.configurePath, 'w')
-        configure = self.variables["SHELL_HEADER"] + "\n"
-        configure += """
+                # Make backups of conffiles
+            for f in self.sections["Files"]:
+                if f.type == "conffile":
+                    prein += f"BackupConfigurationFile {f.stagedLocation}" + "\n"
+            prein += "exit 0\n"
+            scriptfile.write(prein)
+        with open(self.configurePath, 'w') as scriptfile:
+            configure = self.variables["SHELL_HEADER"] + "\n"
+            configure += """
 RestoreConfigurationFile() {
     mv "$1.swsave" "$1"
 }
 """
-        # Restore backups of conffiles
-        for f in self.sections["Files"]:
-            if f.type == "conffile":
-                configure += "RestoreConfigurationFile " + f.stagedLocation + "\n"
+                # Restore backups of conffiles
+            for f in self.sections["Files"]:
+                if f.type == "conffile":
+                    configure += f"RestoreConfigurationFile {f.stagedLocation}" + "\n"
 
-        configure += self.GetScriptAsString("Postinstall")
-        configure += "exit 0\n"
-        scriptfile.write(configure)
-        scriptfile.close()
-
-        scriptfile = open(self.unconfigurePath, 'w')
-        unconf = self.GetScriptAsString("Preuninstall")
-        unconf += "exit 0\n"
-        scriptfile.write(unconf)
-        scriptfile.close()
-
-        scriptfile = open(self.postremovePath, 'w')
-        postremove = self.GetScriptAsString("Postuninstall")
-        postremove += "exit 0\n"
-        scriptfile.write(postremove)
-        scriptfile.close()
+            configure += self.GetScriptAsString("Postinstall")
+            configure += "exit 0\n"
+            scriptfile.write(configure)
+        with open(self.unconfigurePath, 'w') as scriptfile:
+            unconf = self.GetScriptAsString("Preuninstall")
+            unconf += "exit 0\n"
+            scriptfile.write(unconf)
+        with open(self.postremovePath, 'w') as scriptfile:
+            postremove = self.GetScriptAsString("Postuninstall")
+            postremove += "exit 0\n"
+            scriptfile.write(postremove)
         
     def GenerateSpecificationFile(self):
         specfile = open(self.specificationFileName, 'w')
@@ -94,13 +86,13 @@ RestoreConfigurationFile() {
         specfile.write('  title         ' + self.variables["VENDOR"] + '\n')
         specfile.write('category\n')
         specfile.write('  tag           ' + self.variables["SHORT_NAME"] + '\n')
-        specfile.write('  revision      ' + self.fullversion_dashed + '\n')
+        specfile.write(f'  revision      {self.fullversion_dashed}' + '\n')
         specfile.write('end\n')
         specfile.write('\n')
         specfile.write('# Product definition:\n')
         specfile.write('product\n')
         specfile.write('  tag            ' + self.variables["SHORT_NAME"] + '\n')
-        specfile.write('  revision       ' + self.fullversion_dashed + '\n')
+        specfile.write(f'  revision       {self.fullversion_dashed}' + '\n')
         specfile.write('  architecture   HP-UX_B.11.00_32/64\n')
         specfile.write('  vendor_tag     ' + self.variables["SHORT_NAME_PREFIX"] + '\n')
         specfile.write('\n')
@@ -126,7 +118,7 @@ RestoreConfigurationFile() {
         specfile.write('  fileset\n')
         specfile.write('    tag          core\n')
         specfile.write('    title        ' + self.variables["SHORT_NAME"] + ' Core\n')
-        specfile.write('    revision     ' + self.fullversion_dashed + '\n')
+        specfile.write(f'    revision     {self.fullversion_dashed}' + '\n')
         specfile.write('\n')
         specfile.write('    # Dependencies\n')
         for dep in self.sections["Dependencies"]:
@@ -134,21 +126,22 @@ RestoreConfigurationFile() {
             specfile.write(dep)
             specfile.write('\n')
         specfile.write('    # Control files:\n')
-        specfile.write('    configure     ' + self.configurePath + '\n')
-        specfile.write('    unconfigure   ' + self.unconfigurePath + '\n')
-        specfile.write('    preinstall    ' + self.preinstallPath + '\n')
-        specfile.write('    postremove    ' + self.postremovePath + '\n')
+        specfile.write(f'    configure     {self.configurePath}' + '\n')
+        specfile.write(f'    unconfigure   {self.unconfigurePath}' + '\n')
+        specfile.write(f'    preinstall    {self.preinstallPath}' + '\n')
+        specfile.write(f'    postremove    {self.postremovePath}' + '\n')
         specfile.write('\n')
         specfile.write('    # Files:\n')
 
         # Now list all files in staging directory
         for f in self.sections["Files"] + self.sections["Directories"] + self.sections["Links"]:
             if f.type != "sysdir":
-                specfile.write('    file -m ' + str(f.permissions) + \
-                               ' -o ' + f.owner + \
-                               ' -g ' + f.group + \
-                               ' ' + self.stagingDir + f.stagedLocation +
-                               ' ' + f.stagedLocation + '\n')
+                specfile.write(
+                    (
+                        f'    file -m {str(f.permissions)} -o {f.owner} -g {f.group} {self.stagingDir}{f.stagedLocation} {f.stagedLocation}'
+                        + '\n'
+                    )
+                )
 
         specfile.write('\n')
         specfile.write('  end # core\n')
@@ -156,10 +149,6 @@ RestoreConfigurationFile() {
         specfile.write('end  # SD\n')
 
     def BuildPackage(self):
-        if int(self.variables["PFMINOR"]) < 30:
-            osversion = '11iv2'
-        else:
-            osversion = '11iv3'
         if self.variables["PFARCH"] == 'pa-risc':
             arch = 'parisc'
         else:
@@ -168,9 +157,10 @@ RestoreConfigurationFile() {
         if 'OUTPUTFILE' in self.variables:
             depotbasefilename = self.variables['OUTPUTFILE'] + '.depot'
         else:
+            osversion = '11iv2' if int(self.variables["PFMINOR"]) < 30 else '11iv3'
             depotbasefilename = self.variables["SHORT_NAME"] + '-' + \
-                self.fullversion_dashed + \
-                '.hpux.' + osversion + '.' + arch + '.depot'
+                    self.fullversion_dashed + \
+                    '.hpux.' + osversion + '.' + arch + '.depot'
         depotfilename = os.path.join(self.targetDir, depotbasefilename)
 
         if "SKIP_BUILDING_PACKAGE" in self.variables:
@@ -186,6 +176,5 @@ RestoreConfigurationFile() {
             print("Error: swpackage returned non-zero status.")
             exit(1)
 
-        package_filename = open(self.targetDir + "/" + "package_filename", 'w')
-        package_filename.write("%s\n" % depotbasefilename)
-        package_filename.close()
+        with open(f"{self.targetDir}/package_filename", 'w') as package_filename:
+            package_filename.write("%s\n" % depotbasefilename)

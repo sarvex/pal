@@ -26,11 +26,10 @@ def RunInstallBuilder(datafiles):
 
 def ReadLines(filename):
     if not os.path.exists(filename):
-        error(filename + " does not exist")
+        error(f"{filename} does not exist")
 
-    f = open(filename)
-    lines = f.readlines()
-    f.close()
+    with open(filename) as f:
+        lines = f.readlines()
     stripped_lines = []
     for line in lines:
         line = line.strip("\n")
@@ -40,27 +39,21 @@ def ReadLines(filename):
 def GetScriptAsString(script_type):
     script_string = ""
 
-    if PACKAGE_TYPE == "RPM":
+    if PACKAGE_TYPE == "DEPOT":
         if script_type == "Preinstall":
-            script_section = "%pre"
+            script_filename = "preinstall.sh"
         elif script_type == "Postinstall":
-            script_section = "%post"
+            script_filename = "configure.sh"
         elif script_type == "Preuninstall":
-            script_section = "%preun"
+            script_filename = "unconfigure.sh"
         elif script_type == "Postuninstall":
-            script_section = "%postun"
+            script_filename = "postremove.sh"
         else:
-            error("Unsupported script section: " + script_type)
+            error(f"Unsupported script section: {script_type}")
 
-        lines = ReadLines("./intermediate/rpm.spec")
-
-        state = None
+        lines = ReadLines(f"./intermediate/pkg-tmp/{script_filename}")
         for line in lines:
-            if len(line) > 0 and line[0] == "%":
-                state = line
-                continue
-            if state == script_section:
-                script_string += line + "\n"
+            script_string += line + "\n"
 
     elif PACKAGE_TYPE == "DPKG":
         if script_type == "Preinstall":
@@ -72,9 +65,9 @@ def GetScriptAsString(script_type):
         elif script_type == "Postuninstall":
             script_filename = "postrm"
         else:
-            error("Unsupported script section: " + script_type)
+            error(f"Unsupported script section: {script_type}")
 
-        lines = ReadLines("./staging/DEBIAN/" + script_filename)
+        lines = ReadLines(f"./staging/DEBIAN/{script_filename}")
         for line in lines:
             script_string += line + "\n"
 
@@ -86,25 +79,9 @@ def GetScriptAsString(script_type):
         elif script_type == "Preuninstall":
             script_filename = "dummytest.rte.unconfig"
         else:
-            error("Unsupported script section: " + script_type)
+            error(f"Unsupported script section: {script_type}")
 
-        lines = ReadLines("./intermediate/lpp-tmp/" + script_filename)
-        for line in lines:
-            script_string += line + "\n"
-
-    elif PACKAGE_TYPE == "DEPOT":
-        if script_type == "Preinstall":
-            script_filename = "preinstall.sh"
-        elif script_type == "Postinstall":
-            script_filename = "configure.sh"
-        elif script_type == "Preuninstall":
-            script_filename = "unconfigure.sh"
-        elif script_type == "Postuninstall":
-            script_filename = "postremove.sh"
-        else:
-            error("Unsupported script section: " + script_type)
-
-        lines = ReadLines("./intermediate/pkg-tmp/" + script_filename)
+        lines = ReadLines(f"./intermediate/lpp-tmp/{script_filename}")
         for line in lines:
             script_string += line + "\n"
 
@@ -118,11 +95,35 @@ def GetScriptAsString(script_type):
         elif script_type == "Postuninstall":
             script_filename = "postremove"
         else:
-            error("Unsupported script section: " + script_type)
+            error(f"Unsupported script section: {script_type}")
 
-        lines = ReadLines("./intermediate/pkg-tmp/MSFTdummytest/install/" + script_filename)
+        lines = ReadLines(
+            f"./intermediate/pkg-tmp/MSFTdummytest/install/{script_filename}"
+        )
         for line in lines:
             script_string += line + "\n"
+
+    elif PACKAGE_TYPE == "RPM":
+        if script_type == "Preinstall":
+            script_section = "%pre"
+        elif script_type == "Postinstall":
+            script_section = "%post"
+        elif script_type == "Preuninstall":
+            script_section = "%preun"
+        elif script_type == "Postuninstall":
+            script_section = "%postun"
+        else:
+            error(f"Unsupported script section: {script_type}")
+
+        lines = ReadLines("./intermediate/rpm.spec")
+
+        state = None
+        for line in lines:
+            if len(line) > 0 and line[0] == "%":
+                state = line
+                continue
+            if state == script_section:
+                script_string += line + "\n"
 
     return script_string
     
@@ -141,14 +142,14 @@ BackupConfigurationFile() {
 }
 """ + EXPECTED_STRING
 
-    print("TEST: " + inspect.currentframe().f_code.co_name)
+    print(f"TEST: {inspect.currentframe().f_code.co_name}")
     RunInstallBuilder("base_dummy.data include_command_test.data")
 
     actual_string = GetScriptAsString("Preinstall")
 
     if EXPECTED_STRING != actual_string:
         error("Assertion!\nExpected:\n%s\nActual:\n%s\n" % (EXPECTED_STRING, actual_string))
-            
+
     print("PASS")
 
 
@@ -168,14 +169,14 @@ BackupConfigurationFile() {
 }
 """ + EXPECTED_STRING
 
-    print("TEST: " + inspect.currentframe().f_code.co_name)
+    print(f"TEST: {inspect.currentframe().f_code.co_name}")
     RunInstallBuilder("base_dummy.data sections_in_numeric_order.data")
 
     actual_string = GetScriptAsString("Preinstall")
 
     if EXPECTED_STRING != actual_string:
         error("Assertion!\nExpected:\n%s\nActual:\n%s\n" % (EXPECTED_STRING, actual_string))
-            
+
     print("PASS")
 
 
@@ -192,14 +193,14 @@ RestoreConfigurationFile() {
 }
 """ + EXPECTED_STRING
 
-    print("TEST: " + inspect.currentframe().f_code.co_name)
+    print(f"TEST: {inspect.currentframe().f_code.co_name}")
     RunInstallBuilder("base_dummy.data variable_override1.data variable_override2.data")
 
     actual_string = GetScriptAsString("Postinstall")
 
     if EXPECTED_STRING != actual_string:
         error("Assertion!\nExpected:\n%s\nActual:\n%s\n" % (EXPECTED_STRING, actual_string))
-            
+
     print("PASS")
 
 
@@ -211,19 +212,19 @@ echo TRUE PATH 6
 exit 0
 """
 
-    print("TEST: " + inspect.currentframe().f_code.co_name)
+    print(f"TEST: {inspect.currentframe().f_code.co_name}")
     RunInstallBuilder("base_dummy.data large_conditional_path.data")
 
     actual_string = GetScriptAsString("Preuninstall")
 
     if EXPECTED_STRING != actual_string:
         error("Assertion!\nExpected:\n%s\nActual:\n%s" % (EXPECTED_STRING, actual_string))
-            
+
     print("PASS")
 
 
 # MAIN
-Variables = dict()
+Variables = {}
 Defines = []
 
 # Parse command line arguments
@@ -235,7 +236,7 @@ for arg in sys.argv[1:]:
         args.append(arg)
         continue
 
-    if arg[0:2] == "--":
+    if arg[:2] == "--":
         tokens = arg[2:].split("=",1)
         if len(tokens) == 1:
             # This is a define
@@ -252,7 +253,10 @@ if Variables["PF"] == "Linux":
         PACKAGE_TYPE = "RPM"
     elif (Variables["PFDISTRO"] == "ULINUX" and Variables["PF_DISTRO_ULINUX_KIT"] == "D"):
         PACKAGE_TYPE = "DPKG"
-    elif ((Variables["PFDISTRO"] == "REDHAT" or Variables["PFDISTRO"] == "SUSE") and Variables["PFARCH"] == "ppc"):
+    elif (
+        Variables["PFDISTRO"] in ["REDHAT", "SUSE"]
+        and Variables["PFARCH"] == "ppc"
+    ):
         PACKAGE_TYPE = "RPM"
     else:
         error("Invalid Platform")

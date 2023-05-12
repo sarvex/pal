@@ -29,13 +29,9 @@ class LinuxDebFile:
         self.GenerateControlFile()
 
     def WriteScriptFile(self, filePath, section):
-        scriptfile = open(filePath, 'w')
-        script = ""
-        for line in self.sections[section]:
-            script += line + "\n"
-        script += "exit 0\n"
-        scriptfile.write(script)
-        scriptfile.close()
+        with open(filePath, 'w') as scriptfile:
+            script = "".join(line + "\n" for line in self.sections[section]) + "exit 0\n"
+            scriptfile.write(script)
 
     def GenerateScripts(self):
         #
@@ -71,8 +67,9 @@ class LinuxDebFile:
         scxutil.ChMod(self.preUninstallPath, 755)
         scxutil.ChMod(self.postUninstallPath, 755)
 
-        retval = os.system('sudo chown --no-dereference 0:0 %s %s %s %s' \
-                          % (self.preInstallPath, self.postInstallPath, self.preUninstallPath, self.postUninstallPath))
+        retval = os.system(
+            f'sudo chown --no-dereference 0:0 {self.preInstallPath} {self.postInstallPath} {self.preUninstallPath} {self.postUninstallPath}'
+        )
         if retval != 0:
             print("Error: Unable to chown package scripts.")
             exit(1)
@@ -87,14 +84,15 @@ class LinuxDebFile:
 
         for l in self.sections["Links"]:
             filePath = self.stagingDir + l.stagedLocation
-            retval = os.system('sudo chown --no-dereference %s:%s %s' \
-                          % (l.owner, l.group, filePath))
+            retval = os.system(
+                f'sudo chown --no-dereference {l.owner}:{l.group} {filePath}'
+            )
             if retval != 0:
-                print("Error: Unable to chown " + l.stagedLocation)
+                print(f"Error: Unable to chown {l.stagedLocation}")
                 exit(1)
 
     def GetSizeInformation(self):
-        pipe = os.popen("du -s " + self.stagingDir)
+        pipe = os.popen(f"du -s {self.stagingDir}")
 
         sizeinfo = 0
         for line in pipe:
@@ -114,42 +112,36 @@ class LinuxDebFile:
         elif archType == 'x64':
             archType = 'amd64'
 
-        # Open and write the control file
+        with open(self.controlFileName, 'w') as controlfile:
+            controlfile.write('Package:      ' + self.variables["SHORT_NAME"] + '\n')
+            controlfile.write('Source:       ' + self.variables["SHORT_NAME"] + '\n')
+            controlfile.write(f'Version:      {self.fullversion}' + '\n')
+            controlfile.write(f'Architecture: {archType}' + '\n')
+            controlfile.write('Maintainer:   ' + self.variables["MAINTAINER"] + '\n')
+            controlfile.write('Installed-Size: %d\n' % self.GetSizeInformation())
 
-        controlfile = open(self.controlFileName, 'w')
+            controlfile.write('Depends:      ')
+            for d in self.sections["Dependencies"]:
+                controlfile.write(d)
+                if d != self.sections["Dependencies"][-1]:
+                    controlfile.write(", ")
+            controlfile.write('\n')
 
-        controlfile.write('Package:      ' + self.variables["SHORT_NAME"] + '\n')
-        controlfile.write('Source:       ' + self.variables["SHORT_NAME"] + '\n')
-        controlfile.write('Version:      ' + self.fullversion + '\n')
-        controlfile.write('Architecture: ' + archType + '\n')
-        controlfile.write('Maintainer:   ' + self.variables["MAINTAINER"] + '\n')
-        controlfile.write('Installed-Size: %d\n' % self.GetSizeInformation())
+            controlfile.write('Provides:     ' + self.variables["SHORT_NAME"] + '\n')
+            controlfile.write('Section:      utils\n')
+            controlfile.write('Priority:     optional\n')
+            controlfile.write('Description:  ' + self.variables["LONG_NAME"] + '\n')
+            controlfile.write(' %s\n' % self.variables['DESCRIPTION'])
+            controlfile.write('\n')
+        with open(self.configFileName, 'w') as conffile:
+            # Now list all configuration files in staging directory
+            for f in self.sections["Files"]:
+                if f.type == "conffile":
+                    conffile.write(f.stagedLocation + '\n')
 
-        controlfile.write('Depends:      ')
-        for d in self.sections["Dependencies"]:
-            controlfile.write(d)
-            if d != self.sections["Dependencies"][-1]:
-                controlfile.write(", ")
-        controlfile.write('\n')
-
-        controlfile.write('Provides:     ' + self.variables["SHORT_NAME"] + '\n')
-        controlfile.write('Section:      utils\n')
-        controlfile.write('Priority:     optional\n')
-        controlfile.write('Description:  ' + self.variables["LONG_NAME"] + '\n')
-        controlfile.write(' %s\n' % self.variables['DESCRIPTION'])
-        controlfile.write('\n')
-        controlfile.close()
-
-        conffile = open(self.configFileName, 'w')
-
-        # Now list all configuration files in staging directory
-        for f in self.sections["Files"]:
-            if f.type == "conffile":
-                conffile.write(f.stagedLocation + '\n')
-
-        conffile.close()
-
-        retval = os.system('sudo chown --no-dereference 0:0 %s %s' % (self.controlFileName, self.configFileName))
+        retval = os.system(
+            f'sudo chown --no-dereference 0:0 {self.controlFileName} {self.configFileName}'
+        )
         if retval != 0:
             print("Error: Unable to chown package conf files.")
             exit(1)
@@ -159,8 +151,8 @@ class LinuxDebFile:
             pkgName = self.variables['OUTPUTFILE'] + '.deb'
         else:
             pkgName = self.variables["SHORT_NAME"] + '-' + \
-                self.fullversion_dashed + '.universald.' + \
-                str(self.variables["PFMAJOR"])  + '.' + self.variables["PFARCH"] + '.deb'
+                    self.fullversion_dashed + '.universald.' + \
+                    str(self.variables["PFMAJOR"])  + '.' + self.variables["PFARCH"] + '.deb'
 
         if "SKIP_BUILDING_PACKAGE" in self.variables:
             return
@@ -169,17 +161,18 @@ class LinuxDebFile:
         dpkg_path = 'dpkg'
         if "DPKG_LOCATION" in self.variables:
             dpkg_path = self.variables["DPKG_LOCATION"]
-        retval = os.system('cd ' + self.targetDir + '; ' + dpkg_path  + ' -b ' + self.stagingDir + ' ' + pkgName)
+        retval = os.system(
+            f'cd {self.targetDir}; {dpkg_path} -b {self.stagingDir} {pkgName}'
+        )
         if retval != 0:
             print("Error: Failed building DPKG")
             exit(1)
 
         # Undo the permissions settings so we can delete properly
-        retval = os.system('sudo chown -R $USER:`id -gn` %s' % self.stagingDir)
+        retval = os.system(f'sudo chown -R $USER:`id -gn` {self.stagingDir}')
         if retval != 0:
             print("Error: Unable to chown staging directory")
             exit(1)
 
-        package_filename = open(self.targetDir + "/" + "package_filename", 'w')
-        package_filename.write("%s\n" % pkgName)
-        package_filename.close()
+        with open(f"{self.targetDir}/package_filename", 'w') as package_filename:
+            package_filename.write("%s\n" % pkgName)
